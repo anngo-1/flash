@@ -1,6 +1,6 @@
 # Flashcards Data Directory
 
-This directory contains all deck and card data for the TUI Flashcards application.
+This directory contains all deck and card data for flash.
 
 ## Structure
 
