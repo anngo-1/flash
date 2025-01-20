@@ -13,7 +13,7 @@ Card deck creation with vim-like editor.
 Deck options.
 ![image](https://github.com/user-attachments/assets/83338844-b8e3-434a-af7f-25c02f3ce6fe)
 
-Timed Test.
+Timed test with a flashcard deck
 ![image](https://github.com/user-attachments/assets/18b7a038-0692-4c72-a536-4a854326c405)
 
 ![image](https://github.com/user-attachments/assets/fd14f257-5949-4047-8249-68f496c92943)
