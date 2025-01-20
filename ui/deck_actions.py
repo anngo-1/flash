@@ -1,28 +1,54 @@
 import curses
 from .base import BaseUI
-from .input_handler import InputHandler
 from .card_display import CardDisplay
 from models.card import Card
 
 class DeckActions(BaseUI):
     """Handles deck-related actions and menus."""
-    def __init__(self, stdscr, deck_manager):
+    def __init__(self, stdscr, deck_manager, input_handler):
         super().__init__(stdscr)
         self.deck_manager = deck_manager
-        self.input_handler = InputHandler(stdscr)
-        self.card_display = CardDisplay(stdscr, self.input_handler)  
-        self.card_display.deck_manager = deck_manager 
+        self.input_handler = input_handler
+        self.card_display = CardDisplay(stdscr, input_handler)  
+        self.card_display.deck_manager = deck_manager
 
     def create_deck_menu(self):
         """Handle the creation of a new deck."""
         deck_name = self.input_handler.get_multiline_input("Enter deck name:")
         if deck_name:
-            if self.deck_manager.create_deck(deck_name):
-                self.display_message(f"Deck '{deck_name}' created!", pause=True)
-            else:
-                self.display_message(f"Deck '{deck_name}' already exists.", pause=True)
+            try:
+                if self.deck_manager.create_deck(deck_name):
+                    self.display_message(f"Deck '{deck_name}' created!", pause=True)
+                else:
+                    self.display_message(f"Deck '{deck_name}' already exists.", pause=True)
+            except ValueError as e:
+                self.display_message(str(e), pause=True)
+            except Exception as e:
+                self.display_message(f"Error creating deck: {e}", pause=True)
         else:
             self.display_message("Cancelled.", pause=True)
+
+    def rename_deck_menu(self, deck):
+        """Handle the process of renaming the current deck."""
+        new_name = self.input_handler.get_multiline_input(
+            f"Enter new name for '{deck.name}':"
+        )
+        if new_name:
+            try:
+                if self.deck_manager.rename_deck(deck.name, new_name):
+                    self.display_message(f"Deck renamed to '{new_name}'.", pause=True)
+                    deck.name = new_name
+                else:
+                    self.display_message(
+                        "Could not rename deck (name might be taken).",
+                        pause=True
+                    )
+            except ValueError as e:
+                self.display_message(str(e), pause=True)
+            except Exception as e:
+                self.display_message(f"Error renaming deck: {e}", pause=True)
+        else:
+            self.display_message("Rename cancelled.", pause=True)
 
     def select_deck_menu(self):
         """Display a menu to select a deck."""
@@ -146,20 +172,6 @@ class DeckActions(BaseUI):
                 self.display_message("Card deleted.", pause=True)
             except ValueError:
                 self.display_message("Invalid selection.", pause=True)
-
-    def rename_deck_menu(self, deck):
-        """Handle the process of renaming the current deck."""
-        new_name = self.input_handler.get_multiline_input(
-            f"Enter new name for '{deck.name}':"
-        )
-        if new_name and self.deck_manager.rename_deck(deck.name, new_name):
-            self.display_message(f"Deck renamed to '{new_name}'.", pause=True)
-            deck.name = new_name
-        else:
-            self.display_message(
-                "Could not rename deck (name might be taken).",
-                pause=True
-            )
 
     def delete_deck_confirmation(self, deck):
         """Ask for confirmation before deleting a deck."""

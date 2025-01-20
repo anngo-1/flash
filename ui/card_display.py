@@ -13,36 +13,33 @@ class CardDisplay(BaseUI):
         self.deck_manager = None
         self.study_start_time = None
         self.current_mode = "standard"
+        self.front_scroll_offset = 0  # for front card content
+        self.back_scroll_offset = 0   # for back card content
 
-    def _draw_text_in_box(self, r, c, h, w, text, color=None):
+    def _draw_text_in_box(self, r, c, h, w, text, color=None, scroll_offset=0):
         """Draw wrapped text within a specified box."""
         color = color or self.color_default
         wrapped_lines = [
             line for t in text.splitlines()
             for line in textwrap.wrap(t, width=max(1, w - 4))
         ]
-        
+        total_lines = len(wrapped_lines)
         available_lines = h - 2
-        start_row = r + (h - 2 - len(wrapped_lines)) // 2
+        start_index = max(0, scroll_offset)
+        end_index = min(total_lines, start_index + available_lines)
 
-        for i, line in enumerate(wrapped_lines[:available_lines]):
+        for i, line in enumerate(wrapped_lines[start_index:end_index]):
             self.stdscr.addstr(
-                start_row + i,
-                c + (w - len(line)) // 2,
+                r + 1 + i,
+                c + 2,
                 line,
                 color
             )
 
-        if len(wrapped_lines) > available_lines:
-            self.stdscr.addstr(
-                start_row + available_lines - 1,
-                c + w - 5,
-                "...",
-                color
-            )
+        return total_lines
 
     def _show_card(self, card, current, total, deck_name, show_back=False, rating=None):
-        """Display a flashcard, either front or back."""
+        """Display a flashcard."""
         rows, cols = self.stdscr.getmaxyx()
         card_width = min(cols - 6, 100)
         card_height = min(rows - 8, 18)
@@ -51,7 +48,7 @@ class CardDisplay(BaseUI):
 
         self.stdscr.erase()
 
-        # show deck info and progress bar
+        # show deck info and progress
         title_text = f"Deck: {deck_name} ({current}/{total})"
         self.stdscr.addstr(
             1,
@@ -65,13 +62,11 @@ class CardDisplay(BaseUI):
         progress_bar = "=" * int((current/total) * 20)
         self.stdscr.addstr(3, len(progress) + 2, f"[{progress_bar:<20}]")
 
-        # show timer in timed mode
         if self.current_mode == "timed" and self.study_start_time:
             elapsed = int(time.time() - self.study_start_time)
             timer_text = f"Time: {elapsed//60}m {elapsed%60}s"
             self.stdscr.addstr(3, cols - len(timer_text) - 2, timer_text)
 
-        # determine border color based on rating
         border_color = self.color_default
         if show_back and rating:
             border_color = {
@@ -81,7 +76,6 @@ class CardDisplay(BaseUI):
             }.get(rating, self.color_default)
 
         if not show_back:
-            # show only front of card
             self._draw_box(
                 start_row,
                 start_col,
@@ -90,16 +84,16 @@ class CardDisplay(BaseUI):
                 "Front",
                 border_color=self.color_default
             )
-            self._draw_text_in_box(
-                start_row + 1,
-                start_col + 1,
-                card_height - 2,
-                card_width - 2,
-                card.front
+            total_lines = self._draw_text_in_box(
+                start_row,
+                start_col,
+                card_height,
+                card_width,
+                card.front,
+                scroll_offset=self.front_scroll_offset
             )
         else:
             box_height = (card_height - 1) // 2
-            # front section
             self._draw_box(
                 start_row,
                 start_col,
@@ -108,15 +102,15 @@ class CardDisplay(BaseUI):
                 "Front",
                 border_color=border_color
             )
-            self._draw_text_in_box(
-                start_row + 1,
-                start_col + 1,
-                box_height - 1,
-                card_width - 2,
-                card.front
+            front_total_lines = self._draw_text_in_box(
+                start_row,
+                start_col,
+                box_height + 1,
+                card_width,
+                card.front,
+                scroll_offset=self.front_scroll_offset
             )
-            
-            # back section
+
             self._draw_box(
                 start_row + box_height + 1,
                 start_col,
@@ -125,17 +119,23 @@ class CardDisplay(BaseUI):
                 "Back",
                 border_color=border_color
             )
-            self._draw_text_in_box(
-                start_row + box_height + 2,
-                start_col + 1,
-                box_height - 1,
-                card_width - 2,
+            back_total_lines = self._draw_text_in_box(
+                start_row + box_height + 1,
+                start_col,
+                box_height + 1,
+                card_width,
                 card.back,
-                self.color_default
+                self.color_default,
+                scroll_offset=self.back_scroll_offset
             )
+            total_lines = back_total_lines
 
         if rows - 2 > 0:
-            text = "Press <Space> or <Enter> to show back" if not show_back else "(1) I got it! (2) Aw man... (3) Retry"
+            if not show_back:
+                text = "Press <Space> or <Enter> to show back | Scroll: ↑/↓"
+            else:
+                text = "(1) I got it! (2) Aw man... (3) Retry | Top card: ↑/↓, Bottom card: j/k"
+            
             self.stdscr.addstr(
                 rows - 2,
                 max(0, (cols - len(text)) // 2),
@@ -144,6 +144,7 @@ class CardDisplay(BaseUI):
             )
 
         self.stdscr.refresh()
+        return total_lines
 
     def study_deck(self, deck):
         """Handle deck study functionality."""
@@ -173,25 +174,39 @@ class CardDisplay(BaseUI):
             self.study_start_time = time.time()
 
         study_queue = deque(deck.cards)
-
+        
         while study_queue:
+            self.front_scroll_offset = 0
+            self.back_scroll_offset = 0
             current_card_index = len(deck.cards) - len(study_queue)
             card = study_queue.popleft()
 
-            # Check timer in timed mode
             if self.current_mode == "timed":
                 elapsed = int(time.time() - self.study_start_time)
-                if elapsed > 300:  # 5 minute limit
+                if elapsed > 300:
                     self.display_message("Time's up! Study session complete.", pause=True)
                     break
 
-            self._show_card(card, current_card_index + 1, len(deck.cards), deck.name)
-            while True:
+            total_lines = self._show_card(card, current_card_index + 1, len(deck.cards), deck.name)
+            show_back_mode = False
+            
+            while not show_back_mode:
                 key = self.stdscr.getch()
+                
                 if key in [ord(' '), curses.KEY_ENTER, 10]:
-                    break
+                    show_back_mode = True
+                elif key == curses.KEY_UP:
+                    if self.front_scroll_offset > 0:
+                        self.front_scroll_offset -= 1
+                elif key == curses.KEY_DOWN:
+                    rows, cols = self.stdscr.getmaxyx()
+                    card_height = min(rows - 8, 18)
+                    if self.front_scroll_offset < total_lines - (card_height - 2):
+                        self.front_scroll_offset += 1
+                
+                self._show_card(card, current_card_index + 1, len(deck.cards), deck.name, show_back=show_back_mode)
 
-            self._show_card(
+            total_lines = self._show_card(
                 card,
                 current_card_index + 1,
                 len(deck.cards),
@@ -199,17 +214,17 @@ class CardDisplay(BaseUI):
                 show_back=True
             )
 
-            while True:
+            rating_selected = False
+            while not rating_selected:
                 key = self.stdscr.getch()
                 rating = {
-                    '1': 'got_it',
-                    '2': 'aw_man',
-                    '3': 'retry'
-                }.get(chr(key))
+                    ord('1'): 'got_it',
+                    ord('2'): 'aw_man',
+                    ord('3'): 'retry'
+                }.get(key)
 
                 if rating:
                     if rating == 'aw_man':
-                        # insert card back randomly
                         if random.choice([True, False]):
                             study_queue.insert(
                                 random.randint(0, len(study_queue)),
@@ -228,7 +243,32 @@ class CardDisplay(BaseUI):
                         show_back=True,
                         rating=rating
                     )
-                    break
+                    rating_selected = True
+                elif key == curses.KEY_UP:
+                    if self.front_scroll_offset > 0:
+                        self.front_scroll_offset -= 1
+                elif key == curses.KEY_DOWN:
+                    rows, cols = self.stdscr.getmaxyx()
+                    card_height = min(rows - 8, 18)
+                    if self.front_scroll_offset < total_lines - (card_height - 2):
+                        self.front_scroll_offset += 1
+                elif key in [ord('j'), ord('J')]:
+                    rows, cols = self.stdscr.getmaxyx()
+                    card_height = min(rows - 8, 18)
+                    if self.back_scroll_offset < total_lines - (card_height - 2):
+                        self.back_scroll_offset += 1
+                elif key in [ord('k'), ord('K')]:
+                    if self.back_scroll_offset > 0:
+                        self.back_scroll_offset -= 1
+                    
+                self._show_card(
+                    card,
+                    len(deck.cards) - len(study_queue),
+                    len(deck.cards),
+                    deck.name,
+                    show_back=True,
+                    rating=rating
+                )
 
         if self.current_mode == "timed":
             elapsed = int(time.time() - self.study_start_time)

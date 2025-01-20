@@ -4,7 +4,7 @@ import curses.textpad
 import textwrap
 from .base import BaseUI
 
-class InputHandler(BaseUI):
+class SimpleInputHandler(BaseUI):
     """Handles user input functionality."""
     def __init__(self, stdscr):
         super().__init__(stdscr)
