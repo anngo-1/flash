@@ -24,68 +24,91 @@ class VimInputHandler(BaseUI):
         """Opens a Vim-like text box for multiline input."""
         self.stdscr.erase()
         rows, cols = self.stdscr.getmaxyx()
+        
+        if rows < 10 or cols < 20:
+            return None  # Window too small to display editor
+
         box_width = min(cols - 6, 70)
         box_height = min(rows - 8, 15)
         start_y = max(3, (rows - box_height) // 2)
         start_x = max(3, (cols - box_width) // 2)
 
-        # draw prompt box
-        prompt_lines = textwrap.wrap(prompt, box_width - 4)
-        prompt_box_height = len(prompt_lines) + 2
-        self._draw_box(
-            start_y - prompt_box_height - 1,
-            start_x,
-            prompt_box_height,
-            box_width,
-            "Prompt",
-            self.color_default
-        )
-
-        for i, line in enumerate(prompt_lines):
-            self.stdscr.addstr(
-                start_y - prompt_box_height + i + 1,
-                start_x + (box_width - len(line)) // 2,
-                line,
-                curses.A_BOLD | self.color_default
-            )
-
-        # Initialize text
-        self._text_lines = value.splitlines() if value else [""]
-        self._cursor_y = 0
-        self._cursor_x = 0
-        self._scroll_offset = 0
-        self._insert_mode = False
-        self._visual_mode = False
-        self._paste_buffer = []
-
-        # Draw input box
-        self._draw_box(start_y, start_x, box_height, box_width, "Input", self.color_default)
-        self._edit_win = curses.newwin(box_height - 2, box_width - 4, start_y + 1, start_x + 2)
-        self._edit_win.bkgd(' ', self.color_default)
-        self._edit_win.keypad(True)
-
-        instructions = "Vim-like editing | :wq to save | :q! to cancel | :paste to paste"
-        self.stdscr.addstr(
-            start_y + box_height + 1,
-            (cols - len(instructions)) // 2,
-            instructions,
-            curses.A_ITALIC | self.color_default
-        )
-
-        self.stdscr.refresh()
-
         try:
-            curses.curs_set(1)
-            result = self._vim_like_input_loop(box_height - 2, box_width - 4)
-        except KeyboardInterrupt:
-            result = None
-        finally:
-            curses.curs_set(0)
-            del self._edit_win
-            self._edit_win = None
-            self.stdscr.erase()
+            # draw prompt box with bounds checking
+            prompt_lines = textwrap.wrap(prompt, box_width - 4)
+            prompt_box_height = len(prompt_lines) + 2
+            
 
-        return "\n".join(result) if result is not None else None
+            if start_y - prompt_box_height - 1 >= 0:
+                self._draw_box(
+                    start_y - prompt_box_height - 1,
+                    start_x,
+                    prompt_box_height,
+                    box_width,
+                    "Prompt",
+                    self.color_default
+                )
+
+                for i, line in enumerate(prompt_lines):
+                    if start_y - prompt_box_height + i + 1 >= 0:
+                        text_start = start_x + (box_width - len(line)) // 2
+                        if text_start >= 0 and text_start + len(line) < cols:
+                            self.stdscr.addstr(
+                                start_y - prompt_box_height + i + 1,
+                                text_start,
+                                line,
+                                curses.A_BOLD | self.color_default
+                            )
+
+            self._text_lines = value.splitlines() if value else [""]
+            self._cursor_y = 0
+            self._cursor_x = 0
+            self._scroll_offset = 0
+            self._insert_mode = False
+            self._visual_mode = False
+            self._paste_buffer = []
+
+            if start_y + box_height < rows and start_x + box_width < cols:
+                self._draw_box(start_y, start_x, box_height, box_width, "Input", self.color_default)
+                self._edit_win = curses.newwin(box_height - 2, box_width - 4, start_y + 1, start_x + 2)
+                self._edit_win.bkgd(' ', self.color_default)
+                self._edit_win.keypad(True)
+
+                instructions = "Vim-like editing | :wq to save | :q! to cancel | :paste to paste"
+                if start_y + box_height + 1 < rows:
+                    safe_start = max(0, (cols - len(instructions)) // 2)
+                    if safe_start + len(instructions) < cols:
+                        self.stdscr.addstr(
+                            start_y + box_height + 1,
+                            safe_start,
+                            instructions,
+                            curses.A_ITALIC | self.color_default
+                        )
+
+                self.stdscr.refresh()
+
+                try:
+                    curses.curs_set(1)
+                    result = self._vim_like_input_loop(box_height - 2, box_width - 4)
+                except KeyboardInterrupt:
+                    result = None
+                finally:
+                    curses.curs_set(0)
+                    if self._edit_win:
+                        del self._edit_win
+                        self._edit_win = None
+                    self.stdscr.erase()
+
+                return "\n".join(result) if result is not None else None
+            
+            return None 
+            
+        except curses.error:
+            if self._edit_win:
+                del self._edit_win
+                self._edit_win = None
+            self.stdscr.erase()
+            return None
     def _vim_like_input_loop(self, height, width):
         """Handles the main loop for the Vim-like input with scrolling support."""
         command_buffer = []  # buffer to store multi-key commands
@@ -194,80 +217,86 @@ class VimInputHandler(BaseUI):
                 self._cursor_y = 0
         return None  
     def _draw_vim_editor(self, height, width):
-        """Draws the current state of the Vim-like editor with scrolling support."""
         self._edit_win.erase()
+        safe_width = width - 1
+        
         visible_range = range(self._scroll_offset, min(len(self._text_lines), self._scroll_offset + height - 1))
         
         for i, line_idx in enumerate(visible_range):
             line = self._text_lines[line_idx]
-            if self._visual_mode:
-                self._highlight_visual_selection(line_idx, line, width, i)
+            if len(line) > safe_width:
+                display_line = line[:safe_width]
+                self._edit_win.addstr(i, safe_width - 1, '→', curses.A_DIM | self.color_default)
             else:
-                self._edit_win.addstr(i, 0, line[:width], self.color_default)
+                display_line = line
+            
+            if self._visual_mode:
+                self._highlight_visual_selection(line_idx, display_line, safe_width, i)
+            else:
+                self._edit_win.addstr(i, 0, display_line, self.color_default)
+                if len(display_line) < safe_width - 1:
+                    self._edit_win.addstr(i, len(display_line), ' ' * (safe_width - len(display_line) - 1))
 
         if self._scroll_offset > 0:
             self._edit_win.addstr(0, width - 1, "↑", curses.A_DIM | self.color_default)
         if self._scroll_offset + height - 1 < len(self._text_lines):
             self._edit_win.addstr(height - 2, width - 1, "↓", curses.A_DIM | self.color_default)
 
-        # mode indicator in the bottom right
-        if self._insert_mode:
-            mode_indicator = "INSERT"
-            mode_attr = curses.A_BOLD | self.color_highlight
-        elif self._visual_mode:
-            mode_indicator = "VISUAL"
-            mode_attr = curses.A_BOLD | self.color_highlight
-        else:
-            mode_indicator = "NORMAL"
-            mode_attr = curses.A_DIM | self.color_default
-        
+        mode_indicator = "INSERT" if self._insert_mode else "VISUAL" if self._visual_mode else "NORMAL"
+        mode_attr = curses.A_BOLD | self.color_highlight if self._insert_mode or self._visual_mode else curses.A_DIM | self.color_default
         mode_x = width - len(mode_indicator) - 1
-        if mode_x >= 0:  # Only draw if there's space
+        if mode_x >= 0:
             self._edit_win.addstr(height - 1, mode_x, mode_indicator, mode_attr)
 
         cursor_y = self._cursor_y - self._scroll_offset
-        try:
-            if 0 <= cursor_y < height - 1:
-                self._edit_win.move(cursor_y, self._cursor_x)
-        except curses.error:
-            pass
+        if 0 <= cursor_y < height - 1:
+            current_line = self._text_lines[self._cursor_y]
+            if len(current_line) >= safe_width and self._cursor_x >= safe_width:
+                self._text_lines.insert(self._cursor_y + 1, current_line[safe_width:])
+                self._text_lines[self._cursor_y] = current_line[:safe_width]
+                self._cursor_y += 1
+                self._cursor_x = 0
+            else:
+                self._edit_win.move(cursor_y, min(self._cursor_x, len(current_line)))
+
         self._edit_win.refresh()
 
+    def _adjust_cursor_within_bounds(self, height, width):
+        """Keeps the cursor within text boundaries and adjusts scroll if needed."""
+        self._cursor_y = max(0, min(len(self._text_lines) - 1, self._cursor_y))
+        current_line_len = len(self._text_lines[self._cursor_y])
+        
+        safe_width = width - 1  # leave space for scroll indicator
+        self._cursor_x = max(0, min(current_line_len, safe_width - 1))
+        
+        self._adjust_scroll(height)
+
     def _handle_insert_mode(self, key):
-        """Handle keys in insert mode."""
-        if key == curses.KEY_ENTER or key == 10:
-            self._text_lines[self._cursor_y] = self._text_lines[self._cursor_y][:self._cursor_x]
-            self._text_lines.insert(self._cursor_y + 1, self._text_lines[self._cursor_y][self._cursor_x:])
+        """Handle keys in insert mode with bounds checking."""
+        if key == curses.KEY_ENTER or key == 10:  # Enter key
+            current_line = self._text_lines[self._cursor_y]
+            self._text_lines[self._cursor_y] = current_line[:self._cursor_x]
+            self._text_lines.insert(self._cursor_y + 1, current_line[self._cursor_x:])
             self._cursor_y += 1
             self._cursor_x = 0
-        elif key == curses.KEY_BACKSPACE or key == 127:
+        elif key == curses.KEY_BACKSPACE or key == 127:  # Backspace
             if self._cursor_x > 0:
+                current_line = self._text_lines[self._cursor_y]
                 self._text_lines[self._cursor_y] = (
-                    self._text_lines[self._cursor_y][:self._cursor_x - 1] +
-                    self._text_lines[self._cursor_y][self._cursor_x:]
+                    current_line[:self._cursor_x - 1] + current_line[self._cursor_x:]
                 )
                 self._cursor_x -= 1
-            elif self._cursor_y > 0:
+            elif self._cursor_y > 0:  # at start of line, merge with previous line
                 prev_line_len = len(self._text_lines[self._cursor_y - 1])
                 self._text_lines[self._cursor_y - 1] += self._text_lines[self._cursor_y]
                 del self._text_lines[self._cursor_y]
                 self._cursor_y -= 1
                 self._cursor_x = prev_line_len
-        elif key == curses.KEY_DC:  # Delete
-            if self._cursor_x < len(self._text_lines[self._cursor_y]):
-                self._text_lines[self._cursor_y] = (
-                    self._text_lines[self._cursor_y][:self._cursor_x] +
-                    self._text_lines[self._cursor_y][self._cursor_x + 1:]
-                )
-            elif self._cursor_y < len(self._text_lines) - 1:
-                self._text_lines[self._cursor_y] += self._text_lines[self._cursor_y + 1]
-                del self._text_lines[self._cursor_y + 1]
-        elif 32 <= key <= 126:  
+        elif 32 <= key <= 126:  # printable characters
+            current_line = self._text_lines[self._cursor_y]
             char = chr(key)
             self._text_lines[self._cursor_y] = (
-                self._text_lines[self._cursor_y][:self._cursor_x] +
-                char +
-                self._text_lines[self._cursor_y][self._cursor_x:]
+                current_line[:self._cursor_x] + char + current_line[self._cursor_x:]
             )
             self._cursor_x += 1
 

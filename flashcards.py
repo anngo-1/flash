@@ -3,7 +3,6 @@ import argparse
 from ui.main import TUI
 from ui.input_handler import SimpleInputHandler
 from ui.vim_input_handler import VimInputHandler
-
 def parse_args():
     parser = argparse.ArgumentParser(description="Flashcard Application")
     parser.add_argument('--novim', action='store_true', help='Use Vim-style input mode')
