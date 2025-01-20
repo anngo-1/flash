@@ -33,9 +33,9 @@ Timed test with a flashcard deck
   - Timed challenge mode (5 minutes)
 - Keyboard navigation 
 
-# Supported Vim Keybindings
+## Supported Vim Keybindings
 
-## Navigation
+### Navigation
 
 | Key | Mode | Description |
 |-----|------|-------------|
@@ -46,7 +46,7 @@ Timed test with a flashcard deck
 | `G` | Normal | Go to last line |
 | `gg` | Normal | Go to first line |
 
-## Editing
+### Editing
 
 | Key | Mode | Description |
 |-----|------|-------------|
@@ -57,7 +57,7 @@ Timed test with a flashcard deck
 | `O` | Normal | Open new line above and enter insert mode |
 | `ESC` | Insert | Exit insert mode |
 
-## Deletion Commands
+### Deletion Commands
 
 | Key | Mode | Description |
 |-----|------|-------------|
@@ -68,7 +68,7 @@ Timed test with a flashcard deck
 | `d0` | Normal | Delete from cursor to start of line |
 | `db` | Normal | Delete word before cursor |
 
-## Visual Mode
+### Visual Mode
 
 | Key | Mode | Description |
 |-----|------|-------------|
@@ -76,7 +76,7 @@ Timed test with a flashcard deck
 | `y` | Visual | Yank (copy) selected text |
 | `ESC` | Visual | Exit visual mode |
 
-## Clipboard Operations
+### Clipboard Operations
 
 | Key | Mode | Description |
 |-----|------|-------------|
@@ -84,14 +84,14 @@ Timed test with a flashcard deck
 | `P` | Normal | Paste before cursor |
 | `:paste` | Command | Paste from system clipboard |
 
-## File Operations
+### File Operations
 
 | Key | Mode | Description |
 |-----|------|-------------|
 | `:wq` | Command | Save and quit |
 | `:q!` | Command | Quit without saving |
 
-## Special Keys
+### Special Keys
 
 | Key | Mode | Description |
 |-----|------|-------------|
@@ -112,7 +112,7 @@ Timed test with a flashcard deck
 ## Project Structure
 
 ```
-tui-flashcards/
+flash/
 ├── flashcards.py          # Main entry point, initializes curses and TUI
 ├── flashcards/           # Data directory for deck storage
 ├── models/
