@@ -61,6 +61,7 @@ Timed test with a flashcard deck
 
 | Key | Mode | Description |
 |-----|------|-------------|
+| `x` | Normal | Delete at current cursor |
 | `dd` | Normal | Delete current line |
 | `dw` | Normal | Delete from cursor to start of next word |
 | `de` | Normal | Delete from cursor to end of current word |
@@ -134,11 +135,25 @@ flash/
 # Clone the repository
 git clone https://github.com/anngo-1/flash.git
 cd flash
+```
+If you are on Windows, you must install the windows curses python package with:
 
-# Run the application
-python flashcards.py
+```bash
+# Skip this step if on Mac/Linux!
+pip install windows-curses
 ```
 
+Then, you can either run flash in vim mode or no vim mode. In Vim mode, you use vim keybinds in your text editor for creating flashcards and decks. In no vim mode, you use a basic editor without vim keybindings.
+
+```bash
+# Option 1: Run the application in no vim mode
+python flashcards.py --novim
+```
+
+```bash
+# Option 2:Run the application in vim mode
+python flashcards.py
+```
 Requirements:
 - Python 3.x
 - No external dependencies
