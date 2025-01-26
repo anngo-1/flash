@@ -10,7 +10,7 @@ class SimpleInputHandler(BaseUI):
         super().__init__(stdscr)
         self._selected_index = 0
         self._top_index = 0
-        self._edit_win = None  
+        self._edit_win = None
         curses.curs_set(0)  # hide cursor by default
 
     def get_multiline_input(self, prompt, value=None):
@@ -62,14 +62,14 @@ class SimpleInputHandler(BaseUI):
         self.stdscr.refresh()
         text_box = curses.textpad.Textbox(self._edit_win, insert_mode=True)
         text_box.stripspaces = 0
-        
+
         try:
-            curses.curs_set(1)  
+            curses.curs_set(1)
             contents = text_box.edit(self._validate_input)
         except KeyboardInterrupt:
             contents = None
         finally:
-            curses.curs_set(0)  
+            curses.curs_set(0)
             del self._edit_win
             self._edit_win = None
             self.stdscr.erase()
@@ -77,16 +77,11 @@ class SimpleInputHandler(BaseUI):
         return contents.rstrip() if contents and contents.strip() else None
 
     def _validate_input(self, ch):
-        """Validate input in the textbox."""
+        """Validate input in the textbox - simplified for Windows."""
         if ch == 27:  # ESC
             return 0
         elif ch == 10:  # Enter
-            if self._edit_win:
-                self._edit_win.nodelay(True)
-                shift_check = self._edit_win.getch()
-                self._edit_win.nodelay(False)
-                return curses.ascii.BEL if shift_check == -1 else 10
-            return 10
+            return curses.ascii.BEL # Exit edit on Enter
         return ch if ch in (
             curses.KEY_BACKSPACE,
             127,
@@ -106,33 +101,33 @@ class SimpleInputHandler(BaseUI):
         rows, cols = self.stdscr.getmaxyx()
         max_visible_options = rows - 6
         menu_width = min(cols - 4, max(len(text) for _, text in options) + 12)
-        
+
         if self._top_index > 0:
             self._selected_index = self._top_index = 0
-            
+
         # create a mapping of option keys to their indices
         key_map = {key.lower(): i for i, (key, _) in enumerate(options)}
-        
+
         while True:
             self.stdscr.erase()
             menu_height = min(len(options) + 4, max_visible_options + 4)
             menu_row = max(0, (rows - menu_height) // 2)
             menu_col = max(0, (cols - menu_width) // 2)
-            
+
             self._draw_box(menu_row, menu_col, menu_height, menu_width, title)
-            
+
             for i, (key, text) in enumerate(options):
                 if self._top_index <= i < self._top_index + max_visible_options:
                     item_text = f" {key}. {text} "
                     item_col = menu_col + (menu_width - len(item_text)) // 2
-                    
+
                     if i == self._selected_index:
                         self.stdscr.attron(self.color_highlight | curses.A_BOLD)
                         self.stdscr.addstr(menu_row + (i - self._top_index) + 2, item_col, item_text)
                         self.stdscr.attroff(self.color_highlight | curses.A_BOLD)
                     else:
                         self.stdscr.addstr(menu_row + (i - self._top_index) + 2, item_col, item_text)
-            
+
             nav_help_text = "Navigate: j/k or ↑/↓, Select: Enter/letter key, Back: h"
             self.stdscr.addstr(
                 rows - 2,
@@ -140,16 +135,16 @@ class SimpleInputHandler(BaseUI):
                 nav_help_text,
                 curses.A_ITALIC | self.color_default
             )
-            
+
             self.stdscr.refresh()
             key = self.stdscr.getch()
-            
+
             # check for direct key selection
             pressed_char = chr(key).lower() if 32 <= key <= 126 else None
             if pressed_char in key_map:
                 self._selected_index = self._top_index = 0
                 return options[key_map[pressed_char]][0]
-            
+
             # handle other navigation keys
             if key in [ord('j'), curses.KEY_DOWN]:
                 self._selected_index = min(self._selected_index + 1, len(options) - 1)

@@ -125,7 +125,8 @@ class DeckActions(BaseUI):
             return
 
         options = [
-            (str(i + 1), f"Front: {c.front[:40].replace('\n', ' ')}...")
+            (str(i + 1), "Front: " + c.front[:40].replace('\n', ' ') + "...")
+
             for i, c in enumerate(deck.cards)
         ] + [("0", "Cancel")]
 
@@ -160,7 +161,7 @@ class DeckActions(BaseUI):
             return
 
         options = [
-            (str(i + 1), f"Front: {c.front[:40].replace('\n', ' ')}...")
+            (str(i + 1), "Front: " + c.front[:40].replace('\n', ' ') + "...")
             for i, c in enumerate(deck.cards)
         ] + [("0", "Cancel")]
 

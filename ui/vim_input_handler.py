@@ -1,6 +1,7 @@
 import curses
 import curses.ascii
 import textwrap
+import platform
 from .base import BaseUI
 
 class VimInputHandler(BaseUI):
@@ -24,7 +25,7 @@ class VimInputHandler(BaseUI):
         """Opens a Vim-like text box for multiline input."""
         self.stdscr.erase()
         rows, cols = self.stdscr.getmaxyx()
-        
+
         if rows < 10 or cols < 20:
             return None  # Window too small to display editor
 
@@ -37,7 +38,7 @@ class VimInputHandler(BaseUI):
             # draw prompt box with bounds checking
             prompt_lines = textwrap.wrap(prompt, box_width - 4)
             prompt_box_height = len(prompt_lines) + 2
-            
+
 
             if start_y - prompt_box_height - 1 >= 0:
                 self._draw_box(
@@ -100,9 +101,9 @@ class VimInputHandler(BaseUI):
                     self.stdscr.erase()
 
                 return "\n".join(result) if result is not None else None
-            
-            return None 
-            
+
+            return None
+
         except curses.error:
             if self._edit_win:
                 del self._edit_win
@@ -112,7 +113,7 @@ class VimInputHandler(BaseUI):
     def _vim_like_input_loop(self, height, width):
         """Handles the main loop for the Vim-like input with scrolling support."""
         command_buffer = []  # buffer to store multi-key commands
-        
+
         while True:
             self._adjust_scroll(height)
             self._draw_vim_editor(height, width)
@@ -215,13 +216,15 @@ class VimInputHandler(BaseUI):
             next_key = self._edit_win.getch()
             if next_key == ord('g'):
                 self._cursor_y = 0
-        return None  
+        elif key == ord('x'): # Delete character under cursor
+            self._delete_char_under_cursor()
+        return None
     def _draw_vim_editor(self, height, width):
         self._edit_win.erase()
         safe_width = width - 1
-        
+
         visible_range = range(self._scroll_offset, min(len(self._text_lines), self._scroll_offset + height - 1))
-        
+
         for i, line_idx in enumerate(visible_range):
             line = self._text_lines[line_idx]
             if len(line) > safe_width:
@@ -229,7 +232,7 @@ class VimInputHandler(BaseUI):
                 self._edit_win.addstr(i, safe_width - 1, '→', curses.A_DIM | self.color_default)
             else:
                 display_line = line
-            
+
             if self._visual_mode:
                 self._highlight_visual_selection(line_idx, display_line, safe_width, i)
             else:
@@ -265,10 +268,10 @@ class VimInputHandler(BaseUI):
         """Keeps the cursor within text boundaries and adjusts scroll if needed."""
         self._cursor_y = max(0, min(len(self._text_lines) - 1, self._cursor_y))
         current_line_len = len(self._text_lines[self._cursor_y])
-        
+
         safe_width = width - 1  # leave space for scroll indicator
         self._cursor_x = max(0, min(current_line_len, safe_width - 1))
-        
+
         self._adjust_scroll(height)
 
     def _handle_insert_mode(self, key):
@@ -279,7 +282,7 @@ class VimInputHandler(BaseUI):
             self._text_lines.insert(self._cursor_y + 1, current_line[self._cursor_x:])
             self._cursor_y += 1
             self._cursor_x = 0
-        elif key == curses.KEY_BACKSPACE or key == 127:  # Backspace
+        elif key == curses.KEY_BACKSPACE or key == 127 or key == 8:  #backspace (added 8 for Windows compatibility)
             if self._cursor_x > 0:
                 current_line = self._text_lines[self._cursor_y]
                 self._text_lines[self._cursor_y] = (
@@ -300,63 +303,6 @@ class VimInputHandler(BaseUI):
             )
             self._cursor_x += 1
 
-    def _handle_normal_mode(self, key):
-        """Handle keys in normal mode."""
-        if key == ord(':'):
-            command = self._get_command()
-            if command == "wq":
-                return self._text_lines
-            elif command == "q!":
-                return None
-            elif command == "paste":
-                paste_result = self._handle_paste()
-                if paste_result is not None:
-                    self._insert_text_at_cursor(paste_result)
-        elif key == ord('h'):
-            self._cursor_x = max(0, self._cursor_x - 1)
-        elif key == ord('j'):
-            if self._cursor_y < len(self._text_lines) - 1:
-                self._cursor_y += 1
-        elif key == ord('k'):
-            if self._cursor_y > 0:
-                self._cursor_y -= 1
-        elif key == ord('l'):
-            self._cursor_x = min(len(self._text_lines[self._cursor_y]), self._cursor_x + 1)
-        elif key == ord('i'):
-            self._insert_mode = True
-        elif key == ord('a'):
-            self._cursor_x = min(len(self._text_lines[self._cursor_y]), self._cursor_x + 1)
-            self._insert_mode = True
-        elif key == ord('A'):
-            self._cursor_x = len(self._text_lines[self._cursor_y])
-            self._insert_mode = True
-        elif key == ord('o'):
-            self._text_lines.insert(self._cursor_y + 1, "")
-            self._cursor_y += 1
-            self._cursor_x = 0
-            self._insert_mode = True
-        elif key == ord('O'):
-            self._text_lines.insert(self._cursor_y, "")
-            self._cursor_x = 0
-            self._insert_mode = True
-        elif key == ord('v'):
-            self._visual_mode = True
-            self._visual_start = (self._cursor_y, self._cursor_x)
-        elif key == ord('y'):
-            if self._visual_mode:
-                self._copy_visual_selection()
-                self._visual_mode = False
-        elif key == ord('p'):
-            self._paste_text(after=True)
-        elif key == ord('P'):
-            self._paste_text(after=False)
-        elif key == ord('G'):
-            self._cursor_y = len(self._text_lines) - 1
-        elif key == ord('g'):
-            next_key = self._edit_win.getch()
-            if next_key == ord('g'):
-                self._cursor_y = 0
-
     def _delete_word(self):
         """Delete from cursor to start of next word."""
         line = self._text_lines[self._cursor_y]
@@ -372,7 +318,7 @@ class VimInputHandler(BaseUI):
             pos += 1
         while pos < len(line) and not line[pos].isspace():
             pos += 1
-        
+
         self._paste_buffer = [line[self._cursor_x:pos]]
         self._text_lines[self._cursor_y] = line[:self._cursor_x] + line[pos:]
 
@@ -491,11 +437,11 @@ class VimInputHandler(BaseUI):
         if len(self._paste_buffer) > 1:
             remainder = self._text_lines[target_y][target_x:]
             self._text_lines[target_y] = self._text_lines[target_y][:target_x] + self._paste_buffer[0]
-            
+
             self._text_lines[target_y + 1:target_y + 1] = self._paste_buffer[1:]
             last_line_idx = target_y + len(self._paste_buffer)
             self._text_lines[last_line_idx - 1] += remainder
-            
+
             self._cursor_y = last_line_idx - 1
             self._cursor_x = len(self._text_lines[self._cursor_y]) - len(remainder)
         else:
@@ -637,3 +583,19 @@ class VimInputHandler(BaseUI):
                     self._top_index = 0
             elif key == 3:  # CTRL+C
                 raise KeyboardInterrupt
+
+    def _delete_char_under_cursor(self):
+        """Deletes the character at the current cursor position in normal mode."""
+        if not self._text_lines:
+            return
+        line = self._text_lines[self._cursor_y]
+        if 0 <= self._cursor_x < len(line):
+            self._text_lines[self._cursor_y] = line[:self._cursor_x] + line[self._cursor_x+1:]
+            if not self._text_lines[self._cursor_y]: # if line becomes empty after deleting the only char
+                if len(self._text_lines) > 1:
+                    del self._text_lines[self._cursor_y]
+                    if self._cursor_y >= len(self._text_lines):
+                        self._cursor_y = len(self._text_lines) - 1
+                    self._cursor_x = 0
+                else:
+                    self._text_lines[0] = "" # keep at least one empty line
